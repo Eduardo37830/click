@@ -1,0 +1,19 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.6, pytest-9.1.1, pluggy-1.6.0 -- D:\proyecto\click\.venv_test\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\proyecto\click
+configfile: pyproject.toml
+collecting ... collected 10 items
+
+pruebas_caja_negra.py::test_tc1_intrange_valor_medio_valido PASSED       [ 10%]
+pruebas_caja_negra.py::test_tc2_intrange_limite_inferior_incluido PASSED [ 20%]
+pruebas_caja_negra.py::test_tc3_intrange_limite_superior_incluido PASSED [ 30%]
+pruebas_caja_negra.py::test_tc4_intrange_bajo_el_limite_invalido PASSED  [ 40%]
+pruebas_caja_negra.py::test_tc5_intrange_sobre_el_limite_invalido PASSED [ 50%]
+pruebas_caja_negra.py::test_tc6_intrange_clamp_ajusta_al_limite PASSED   [ 60%]
+pruebas_caja_negra.py::test_tc7_choice_valor_valido PASSED               [ 70%]
+pruebas_caja_negra.py::test_tc8_choice_valor_invalido PASSED             [ 80%]
+pruebas_caja_negra.py::test_tc9_flag_ausente_usa_default_false PASSED    [ 90%]
+pruebas_caja_negra.py::test_tc10_flag_presente_activa_true PASSED        [100%]
+
+============================= 10 passed in 0.12s ==============================
