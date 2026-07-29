@@ -13,6 +13,18 @@ repos:
     hooks:
       - id: codespell
         args: ['--write-changes', '--ignore-words-list=inout,te']
+        exclude: >
+          (?x)^(
+            acta_inspeccion\.md|
+            anexo_iso25010\.md|
+            casos_prueba_caja_negra\.md|
+            entregable\.md|
+            fichas_deuda_tecnica\.md|
+            lunes_entregables\.md|
+            matriz_gobernanza\.md|
+            pruebas_caja_negra\.py|
+            openspec/.*
+          )$
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
