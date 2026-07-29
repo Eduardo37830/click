@@ -33,6 +33,72 @@ Fuentes: `gh` CLI sobre `pallets/click`, API pública de SonarCloud
 
 **Candidato para CoNQ:** [#3384](https://github.com/pallets/click/issues/3384) — rompe `pytest` en entornos con fd duplicado. Es el de mayor blast radius (afecta a *cualquier* proyecto downstream que use `CliRunner` bajo pytest), tiene fecha de introducción (release 8.3.3) y fecha de fix (PR #3391) bien acotadas para memoria de cálculo de costo de no-calidad.
 
+## Memoria de cálculo — CoNQ (Costo de No Calidad) del incidente #3384
+
+### 1. Línea de tiempo verificada (fuente: `gh issue view`/`gh pr view`/`CHANGES.md`)
+
+| Hito | Fecha | Fuente |
+|---|---|---|
+| Release que introduce la regresión (`8.3.3`) | 2026-04-22 | `gh release list` |
+| Issue reportado por un usuario (`#3384`) | 2026-04-27 (5 días después del release) | `gh issue view 3384` |
+| PR de fix abierto (`#3391`) | 2026-04-29 (2 días después del reporte) | `gh pr view 3391` |
+| PR de fix mergeado | 2026-05-16 (17 días de revisión) | `gh pr view 3391` |
+| Release con el fix (`8.4.0`) | 2026-05-17 | `CHANGES.md` línea 110, `gh release list` |
+| **Ventana de exposición del defecto** | **25 días** (8.3.3 → 8.4.0) | calculado |
+
+El PR de fix (`#3391`, "Add capture mode to `CliRunner` and revert default
+`fileno` exposure") tiene **391 líneas agregadas, 98 eliminadas, 4 archivos
+modificados, 2 commits** — no es un one-liner: introduce un concepto nuevo
+(`capture=` mode en `CliRunner`) para poder revertir el comportamiento
+problemático de 8.3.3 sin romper el caso de uso que esa versión intentaba
+habilitar. El issue acumuló 7 comentarios de discusión antes de cerrarse.
+
+### 2. Tarifa/hora declarada
+
+Se declara una tarifa de **$60.000 COP/hora** (≈ USD 15/hora al cambio de
+referencia), correspondiente al costo totalmente cargado (salario +
+prestaciones + overhead) de un desarrollador Python senior en Colombia según
+bandas salariales de mercado 2025-2026 para perfiles de mantenimiento
+open-source / backend senior. Se aplica la **misma tarifa a todos los roles**
+(mantenedor, revisor, equipos downstream) como simplificación metodológica
+explícita — en la práctica el costo real de un mantenedor voluntario
+internacional de Pallets puede diferir, pero no hay forma de observarlo
+objetivamente desde el historial público, así que se usa una tarifa de
+referencia única y se declara como supuesto.
+
+### 3. Desglose de horas por actividad
+
+| Actividad | Horas estimadas | Justificación |
+|---|---|---|
+| **Diagnóstico** (mantenedor lee el issue, reproduce el fallo, identifica la causa raíz en el manejo de `fileno`/`fd`) | 3.0 h | Brecha de 2 días calendario entre reporte y PR abierto; para un mantenedor voluntario con otras responsabilidades, se estima que el trabajo efectivo de diagnóstico (no el tiempo calendario) fue de medio día laboral |
+| **Fix** (implementación del PR #3391: revertir comportamiento de 8.3.3 + diseñar el nuevo modo `capture=`) | 6.0 h | 391 líneas agregadas / 98 eliminadas en 4 archivos, 2 commits; el fix no es trivial porque debe preservar el caso de uso original de 8.3.3 sin romper la compatibilidad con pytest |
+| **Revisión de código** (aprobación del PR, discusión en 7 comentarios del issue) | 2.0 h | 17 días de brecha calendario entre apertura y merge sugieren idas y vueltas de revisión, no bloqueo continuo; se estima el tiempo efectivo de revisión, no el calendario |
+| **Release** (changelog, build, tag, publicación a PyPI vía `publish.yaml`) | 0.5 h | Costo marginal atribuible a este fix específico dentro de una release (8.4.0) que agrupa múltiples cambios; el proceso de release en sí (`uv build` → draft release → OIDC publish) está automatizado |
+| **Subtotal interno (mantenedores)** | **11.5 h** | — |
+| **Impacto downstream** (equipos que actualizaron a 8.3.3 y sufrieron fallos de CI/pytest durante la ventana de 25 días, antes de que 8.4.0 estuviera disponible) | 50 h | Supuesto explícito: se estima que ~50 proyectos downstream (de los miles que dependen de `click`) actualizaron a `8.3.3` durante la ventana de 25 días y usan `CliRunner` bajo `pytest` con captura a nivel de `fd` (el caso específico que rompe). Cada equipo afectado invierte en promedio ~1 hora en diagnosticar un fallo de CI intermitente/confuso antes de identificar que la causa es la librería y no su propio código (buscar en logs, hacer bisect de dependencias, encontrar el issue de GitHub). **Esta es la cifra más especulativa del cálculo** — no hay telemetría pública de adopción de versión ni de uso de `capture="fd"`; se declara como supuesto conservador (50 equipos es una fracción muy pequeña de la base de instalación de `click`, que solo en PyPI tiene millones de descargas/mes) |
+| **Total horas** | **61.5 h** | 11.5 h internas + 50 h downstream |
+
+### 4. Costo total de no calidad (CoNQ)
+
+```text
+CoNQ = Total horas × Tarifa/hora
+     = 61.5 h × $60.000 COP/h
+     = $3.690.000 COP (≈ USD 925)
+```
+
+**Desglose:**
+
+- Costo interno (Pallets, diagnóstico+fix+revisión+release): 11.5 h × $60.000 = **$690.000 COP** (≈ USD 173)
+- Costo downstream (equipos consumidores afectados): 50 h × $60.000 = **$3.000.000 COP** (≈ USD 750)
+- **El 81% del CoNQ de este incidente lo pagan los consumidores de la librería, no Pallets** — es la naturaleza de un defecto en una dependencia transitiva ampliamente usada: el costo de diagnóstico se externaliza a cientos de equipos que no tienen forma de saber que el problema no es su código.
+
+### 5. Supuestos explícitos (para defender el número ante réplicas)
+
+1. Tarifa única de $60.000 COP/h para todos los roles — simplificación declarada, no observación real de costos de mantenedores voluntarios internacionales.
+2. Horas de diagnóstico/fix/revisión estimadas a partir de brechas calendario entre eventos de GitHub (issue→PR→merge), **no** de tiempo efectivo medido (no existe telemetría de tiempo real de los mantenedores).
+3. El número de equipos downstream afectados (50) es una **estimación conservadora no verificable con datos públicos** — se declara explícitamente como el supuesto más débil del cálculo, y el CoNQ total escala linealmente con este número si el equipo evaluador quiere ajustarlo (p. ej., 500 equipos → CoNQ ≈ $30.7M COP).
+4. No se incluye el costo de reputación/confianza (usuarios que consideran migrar a otra librería de CLI tras el incidente) por no ser cuantificable de forma objetiva — se documenta como riesgo cualitativo adicional, no como parte del CoNQ numérico.
+
 ---
 
 ## 2. Quality Gates reales del proceso as-is
@@ -106,19 +172,46 @@ Fuente: `GET sonarcloud.io/api/issues/search?componentKeys=Eduardo37830_click&re
 
 **Por severidad:** MAJOR 43, CRITICAL 25, MINOR 4, BLOCKER 1.
 
-### Pareto por regla (clásico 80/20 — confirma el principio)
+### Pareto por regla — separado producción vs. test (corrección 29-jul-2026)
+
+**Corrección:** la versión anterior mezclaba en una sola tabla reglas de
+producción (`S3776`, complejidad cognitiva) con reglas exclusivas de código
+de test (`S5778`, `S8997` — patrones de `pytest`), lo cual conflacionaba dos
+perfiles de riesgo distintos. `sonar.tests=tests` ya separa correctamente
+ambos conjuntos en SonarCloud (57 issues en `src/click`, 16 en `tests/`); lo
+que faltaba era reflejar esa separación en el Pareto de este documento, no
+corregir la configuración (que ya estaba bien).
+
+**Pareto por regla — SOLO código de producción (`src/click`, 57 issues):**
 
 | Regla | Nombre | Hallazgos | % | % acumulado |
 |---|---|---|---|---|
-| python:S3776 | Cognitive Complexity demasiado alta | 22 | 30.1% | 30.1% |
-| python:S5778 | Un solo `assert`/invocación esperado al testear excepciones | 12 | 16.4% | 46.6% |
-| python:S5806 | Builtins no deben ser sombreados por variables locales | 9 | 12.3% | 58.9% |
-| python:S1172 | Parámetros de función no usados deben eliminarse | 8 | 11.0% | 69.9% |
-| python:S107 | Demasiados parámetros en función/método | 5 | 6.8% | 76.7% |
-| python:S8997 | Tests deben usar fixture `monkeypatch` | 2 | 2.7% | 79.5% |
-| (14 reglas restantes, 1 hallazgo c/u) | — | 15 | 20.5% | 100% |
+| python:S3776 | Cognitive Complexity demasiado alta | 22 | 38.6% | 38.6% |
+| python:S5806 | Builtins no deben ser sombreados por variables locales | 9 | 15.8% | 54.4% |
+| python:S1172 | Parámetros de función no usados deben eliminarse | 8 | 14.0% | 68.4% |
+| python:S107 | Demasiados parámetros en función/método | 5 | 8.8% | 77.2% |
+| (12 reglas restantes, 1 hallazgo c/u) | — | 13 | 22.8% | 100% |
 
-**Lectura:** el 30% de las reglas (6 de 20) explican el 80% de los hallazgos. La **complejidad cognitiva** por sí sola es el 30% de toda la deuda — señal clara de prioridad de refactorización, concentrada en `core.py` y `termui.py`.
+**Lectura:** en producción, el Pareto es aún más pronunciado que en la
+versión mezclada: **el 7% de las reglas (4 de 17) explican el 77% de los
+hallazgos de producción**, y la complejidad cognitiva (`S3776`) sube de
+30.1% a **38.6%** al aislarla del ruido de las reglas de test — confirma con
+más fuerza que la refactorización de complejidad es la prioridad número uno.
+
+**Reglas exclusivas de `tests/` (16 issues, no compiten por prioridad de
+refactorización de producción):**
+
+| Regla | Nombre | Hallazgos | % de issues de test |
+|---|---|---|---|
+| python:S5778 | Un solo `assert`/invocación esperado al testear excepciones | 12 | 75.0% |
+| python:S8997 | Tests deben usar fixture `monkeypatch` | 2 | 12.5% |
+| python:S9000 | `pytest.raises` debe usarse como context manager | 1 | 6.2% |
+| python:S9001 | Fallos de test esperados deben incluir una razón | 1 | 6.2% |
+
+**Nota:** `S9000` es el único hallazgo tipo `BUG` de todo el proyecto (ver
+Anexo ISO/IEC 5055) — está en `tests/test_utils/test_echo_via_pager.py:165`,
+confirmando que es deuda de calidad de test, no un defecto de fiabilidad en
+producción.
 
 ### Pareto por módulo
 
@@ -134,25 +227,50 @@ Fuente: `GET sonarcloud.io/api/issues/search?componentKeys=Eduardo37830_click&re
 
 ### Densidad de defectos por KLOC (solo `src/click`, producción)
 
-| Módulo | Hallazgos | LOC | KLOC | Defectos/KLOC |
-|---|---|---|---|---|
-| `_compat.py` | 7 | 590 | 0.59 | **11.86** |
-| `termui.py` | 8 | 1,003 | 1.00 | **7.98** |
-| `_winconsole.py` | 2 | 297 | 0.30 | 6.73 |
-| `_termui_impl.py` | 5 | 945 | 0.95 | 5.29 |
-| `_textwrap.py` | 1 | 188 | 0.19 | 5.32 |
-| `core.py` | 18 | 3,792 | 3.79 | 4.75 |
-| `formatting.py` | 1 | 320 | 0.32 | 3.13 |
-| `testing.py` | 3 | 798 | 0.80 | 3.76 |
-| `parser.py` | 2 | 533 | 0.53 | 3.75 |
-| `decorators.py` | 2 | 627 | 0.63 | 3.19 |
-| `utils.py` | 2 | 688 | 0.69 | 2.91 |
-| `exceptions.py` | 1 | 378 | 0.38 | 2.65 |
-| `types.py` | 4 | 1,422 | 1.42 | 2.81 |
-| `shell_completion.py` | 1 | 801 | 0.80 | 1.25 |
-| **Total `src/click`** | **57** | **12,629** | **12.63** | **4.51** |
+**Corrección 29-jul-2026:** la versión anterior de esta tabla usaba `wc -l`
+(líneas físicas totales, incl. blancos/comentarios/docstrings) como
+denominador. Se reemplaza por `ncloc` (líneas de código ejecutable,
+excluyendo blancos y comentarios), obtenido directamente de SonarCloud vía
+`GET /api/measures/component_tree?component=Eduardo37830_click&metricKeys=ncloc&qualifiers=FIL`
+— es la métrica que SonarCloud usa internamente y la que corresponde
+correctamente a un cálculo de densidad de defectos. `sonar.tests=tests` ya
+estaba correctamente configurado desde el primer commit (verificado: los 17
+archivos de `ncloc` son exclusivamente de `src/click`, ningún archivo de
+`tests/` se cuenta ahí) — no había un defecto de configuración que corregir,
+solo un error en el denominador usado en este documento.
 
-**Lectura:** `_compat.py` tiene la densidad más alta (11.86/KLOC) pese a ser un módulo pequeño — es el módulo de compatibilidad multiplataforma (Windows/Unix/terminal), consistente con su naturaleza de "código pegamento" con muchas ramas condicionales. `core.py` concentra el volumen absoluto (18 hallazgos) pero su densidad relativa (4.75) es media — es grande y complejo, pero no desproporcionadamente peor por línea que el resto.
+| Módulo | Hallazgos | `ncloc` | KLOC | Defectos/KLOC |
+|---|---|---|---|---|
+| `termui.py` | 8 | 440 | 0.440 | **18.18** |
+| `_compat.py` | 7 | 411 | 0.411 | **17.03** |
+| `core.py` | 18 | 1,892 | 1.892 | 9.51 |
+| `_winconsole.py` | 2 | 227 | 0.227 | 8.81 |
+| `_termui_impl.py` | 5 | 617 | 0.617 | 8.10 |
+| `_textwrap.py` | 1 | 131 | 0.131 | 7.63 |
+| `decorators.py` | 2 | 300 | 0.300 | 6.67 |
+| `testing.py` | 3 | 451 | 0.451 | 6.65 |
+| `utils.py` | 2 | 327 | 0.327 | 6.12 |
+| `parser.py` | 2 | 331 | 0.331 | 6.04 |
+| `formatting.py` | 1 | 197 | 0.197 | 5.08 |
+| `types.py` | 4 | 826 | 0.826 | 4.84 |
+| `exceptions.py` | 1 | 229 | 0.229 | 4.37 |
+| `shell_completion.py` | 1 | 482 | 0.482 | 2.07 |
+| `__init__.py` | 0 | 121 | 0.121 | 0.00 |
+| `globals.py` | 0 | 28 | 0.028 | 0.00 |
+| `_utils.py` | 0 | 20 | 0.020 | 0.00 |
+| **Total `src/click`** | **57** | **7,030** | **7.030** | **8.11** |
+
+**Lectura corregida:** con el denominador correcto, **`termui.py` (18.18) y
+`_compat.py` (17.03) son, por un margen amplio, los módulos con mayor
+densidad de defectos** — más del doble que `core.py` (9.51), pese a que
+`core.py` concentra el mayor volumen absoluto (18 hallazgos). Esto **invierte
+la lectura anterior** (que señalaba a `_compat.py` como único módulo crítico
+con `core.py` en un nivel "medio"): ahora `termui.py` y `_compat.py` destacan
+juntos como los dos módulos con la deuda más concentrada por línea de código,
+y `core.py`, aunque voluminoso, es proporcionalmente menos denso que ambos.
+La densidad global del proyecto también sube de 4.51 a **8.11
+defectos/KLOC** al usar el denominador correcto (7.03 KLOC reales de
+producción, no 12.63 KLOC de líneas físicas totales).
 
 ---
 
@@ -162,5 +280,5 @@ Fuente: `GET sonarcloud.io/api/issues/search?componentKeys=Eduardo37830_click&re
 - **Frecuencia de despliegue** = # releases publicadas ÷ días entre la primera y última release de la ventana muestreada.
 - **Change failure rate** = releases de parche que el propio `CHANGES.md` documenta como corrección de regresión introducida por la release anterior ÷ total de releases en la ventana.
 - **MTTR** = fecha de release del fix − fecha de release que introdujo el defecto (proxy de exposición real del usuario, no fecha de commit).
-- **Densidad de defectos** = hallazgos abiertos de SonarCloud (no resueltos) ÷ KLOC de código fuente, excluyendo tests.
+- **Densidad de defectos** = hallazgos abiertos de SonarCloud (no resueltos) ÷ `ncloc` (líneas de código ejecutable medidas por SonarCloud, no `wc -l`), excluyendo tests. *Corrección 29-jul-2026: la versión inicial de este cálculo usó `wc -l` por error; ver nota en la sección 4.*
 - Todas las cifras son reproducibles con los comandos `gh` y las URLs de API citadas arriba — inclúyanlas como anexo de trazabilidad.

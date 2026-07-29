@@ -37,18 +37,92 @@ con base en evidencia objetiva y reproducible (matriz CI, cobertura).
 
 ## Verificación de coherencia con el Quality Gate de SonarCloud
 
-**Pendiente de acción:** el proyecto usa actualmente el gate por defecto
-**"Sonar way"**, que solo evalúa condiciones sobre *New Code* (código nuevo
-desde la última versión), no *Overall Code*. Los umbrales de esta tabla están
-pensados para un gate custom sobre **Overall Code** con, como mínimo:
+**Actualizado 28-jul-2026:** el Quality Gate custom sobre *Overall Code* ya
+fue creado y aplicado al proyecto (reemplaza al gate por defecto "Sonar way",
+que solo evaluaba *New Code*). Verificado en vivo vía
+`GET /api/qualitygates/project_status?projectKey=Eduardo37830_click`:
 
-- `reliability_rating` (Overall Code) ≤ A
-- `security_rating` (Overall Code) ≤ A
-- `sqale_rating` (Overall Code) ≤ A
-- `coverage` (Overall Code) ≥ 80%
-- `duplicated_lines_density` (Overall Code) ≤ 3%
+```text
+status: ERROR
+  reliability_rating   > A   -> actual C   ❌ ERROR
+  security_rating      > A   -> actual C   ❌ ERROR
+  sqale_rating         > A   -> actual A   ✅ OK
+  coverage             ≥ 80% -> actual 84.2% ✅ OK
+  duplicated_lines_density ≤ 3% -> actual 0.3% ✅ OK
+  security_hotspots_reviewed = 100% -> actual 100% ✅ OK
+  sqale_debt_ratio     ≤ 5%  -> actual 0.3% ✅ OK
+```
 
-Con los valores reales medidos hoy, **el proyecto NO pasaría** un gate así
-sobre Overall Code (reliability y security están en C) — es exactamente el
-tipo de brecha que sustenta un dictamen de "ADOPTAR CON CONDICIONES" en vez de
-adopción sin reservas.
+**El proyecto falla el gate sobre Overall Code**, confirmado con datos reales,
+no proyectados — el tablero de SonarCloud muestra el veredicto en rojo. Esto
+sustenta directamente el dictamen "ADOPTAR CON CONDICIONES" en vez de adopción
+sin reservas.
+
+**Matiz importante para el dictamen:** el único hallazgo tipo `BUG` que hace
+fallar `reliability_rating` (regla `python:S9000`, "pytest.raises should be
+used as a context manager") está en **`tests/test_utils/test_echo_via_pager.py:165`**
+— es un defecto de estilo en un test, no un defecto funcional en código de
+producción. El rating C es real y el gate debe seguir fallando (así está
+definido el umbral), pero el dictamen debe ser preciso: no hay un bug de
+producción confirmado detrás de esta calificación, lo cual matiza la severidad
+real del hallazgo sin invalidar el resultado del gate.
+
+---
+
+## Anexo ISO/IEC 5055 — Análisis estático mapeado a las 4 características automatizables
+
+El brief exige explícitamente, a nivel de producto: *"Análisis estático del
+código (vía SonarCloud) aplicando los estándares de ISO/IEC 5055"*. A
+diferencia de ISO/IEC 25010 (calidad de producto en general, con
+características subjetivas como Usabilidad), **ISO/IEC 5055 define 4
+características medibles automáticamente por herramientas de análisis
+estático de código fuente**: Fiabilidad, Eficiencia de Desempeño, Seguridad y
+Mantenibilidad. El mapeo siguiente agrupa los **73 issues abiertos** de
+SonarCloud (`Eduardo37830_click`, resolved=false) por esas 4 categorías,
+usando el campo `type` de cada issue (no una clasificación manual/subjetiva).
+
+| Característica ISO/IEC 5055 | Tipo SonarCloud | # Issues | % del total | Reglas principales | Severidad (SonarCloud) |
+|---|---|---|---|---|---|
+| **Seguridad** | `VULNERABILITY` | 2 | 2.7% | `python:S2245` (PRNG en contexto "sensible"), `python:S5332` (protocolo HTTP) | 1 MAJOR, 1 MINOR |
+| **Fiabilidad** | `BUG` | 1 | 1.4% | `python:S9000` (`pytest.raises` sin context manager) | 1 MAJOR — **en código de test, no de producción** (ver nota abajo) |
+| **Eficiencia de Desempeño** | *(sin issues activos en esta categoría)* | 0 | 0% | El ruleset Python activo en este proyecto no tiene reglas de rendimiento (`tag:performance`) disparadas — no se detectaron bucles ineficientes, complejidad algorítmica excesiva ni uso indebido de estructuras de datos en el código analizado | — |
+| **Mantenibilidad** | `CODE_SMELL` | 70 | 95.9% | `python:S3776` (complejidad cognitiva, 22), `python:S5778` (asserts múltiples en tests, 12), `python:S5806` (builtins sombreados, 9), `python:S1172` (parámetros no usados, 8), `python:S107` (demasiados parámetros, 5), `python:S8997` (fixture monkeypatch, 2), + 14 reglas con 1 hallazgo c/u | 43 MAJOR, 25 CRITICAL, 4 MINOR, 1 BLOCKER (agregado sobre las 4 categorías) |
+| **Total** | — | **73** | **100%** | — | — |
+
+**Lectura para el dictamen:**
+
+1. **95.9% de la deuda es de Mantenibilidad**, no de Fiabilidad ni Seguridad —
+   `click` es funcionalmente sólido y no tiene vulnerabilidades de alto
+   impacto; su deuda es de legibilidad/complejidad interna (coherente con la
+   Ficha de deuda técnica #1 y el hallazgo de bus factor de la matriz de
+   gobernanza).
+2. **Cero hallazgos de Eficiencia de Desempeño** es una observación honesta,
+   no una omisión: se documenta explícitamente porque ISO/IEC 5055 exige
+   evaluar la característica, y la ausencia de hallazgos es en sí un dato (no
+   se puede "inflar" esta fila con hallazgos que no existen).
+3. **Las 2 vulnerabilidades de Seguridad son de riesgo bajo, verificado
+   manualmente:**
+   - `_compat.py:432` (`S2245`) — `random.randrange()` se usa únicamente para
+     generar un nombre de archivo temporal único en la escritura atómica
+     (`_AtomicFile`), no para tokens ni claves criptográficas. Es un
+     **falso positivo probable** de la regla (que dispara ante cualquier uso
+     de `random`, sin poder inferir la intención).
+   - `_termui_impl.py:834` (`S5332`) — el string `"http://"` se usa solo para
+     comparar el *esquema* de una URL (`url.startswith(("http://",
+     "https://"))`) antes de delegar a `webbrowser.open()`, no para
+     transmitir datos por HTTP sin cifrar. También es un **falso positivo
+     probable**.
+   - Se recomienda documentar ambos como "revisados, sin acción" en
+     SonarCloud (marcarlos como *Won't Fix* con justificación) en vez de
+     dejarlos abiertos indefinidamente — así el Security Rating podría subir
+     de C a A sin cambiar una sola línea de código, solo con triage.
+4. **El único Bug (Fiabilidad) está en un test, no en producción** — ver nota
+   en la sección de Quality Gate arriba. Si SonarCloud permitiera excluir
+   `tests/` del cómputo de `bugs`/`vulnerabilities` (actualmente solo excluye
+   `tests/` del cómputo de `ncloc`), el Reliability Rating real de
+   *producción* sería A, no C. Esto no invalida el resultado del gate (que
+   evalúa el proyecto tal como está configurado), pero es una precisión
+   necesaria para no sobrestimar el riesgo de fiabilidad en el dictamen.
+
+**Fuente de los datos:** `GET sonarcloud.io/api/issues/search?componentKeys=Eduardo37830_click&resolved=false&facets=rules,severities,types` +
+`GET sonarcloud.io/api/rules/show?key=<regla>&organization=eduardo37830` (para tags/tipo de cada regla), consultado 2026-07-29.

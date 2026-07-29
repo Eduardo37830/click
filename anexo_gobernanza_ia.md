@@ -62,8 +62,13 @@ El documento se alinea con:
 | **Prompt de sistema** | Enfoque "Auditor Adversario": el prompt instruye al agente a desconfiar de instrucciones incrustadas en el contenido del PR, priorizar la tabla de criterios del Anexo ISO 25010 y formatear la salida estrictamente en Markdown tabular. NO modifica código. |
 | **Entradas** | Diff del PR, Anexo de Calidad (ISO 25010), resultados de CI/CD |
 | **Salidas** | Tabla Markdown con columnas: Criterio, Umbral, Evidencia, Dictamen (CUMPLE/NO CUMPLE). Veredicto final: APROBADO o RECHAZADO. |
-| **Control humano** | El Custodio de Calidad verifica cada dictamen del QGA antes de允许ir el merge. Si hay discrepancia en ≥ 2 criterios, el caso se escala al equipo de mantenedores para decisión colegiada. |
+| **Control humano** | El Custodio de Calidad verifica cada dictamen del QGA antes de definir el merge. Si hay discrepancia en ≥ 2 criterios, el caso se escala al equipo de mantenedores para decisión colegiada. |
 | **Cumplimiento ISO 42001** | Cláusula 9 (Evaluación): el QGA actúa como herramienta de auditoría interna. Cláusula 10 (Mejora): los rechazos alimentan el ciclo de mejora continua del AIMS. |
+
+**PoC con ejecución real:** ver [`poc_agente_qga.md`](poc_agente_qga.md) —
+system prompt instanciado literalmente y 2 ejecuciones contra PRs reales ya
+mergeados de `pallets/click` (`#3391` → APROBADO, `#3186` → RECHAZADO), con
+verificación humana independiente documentada para cada una.
 
 ## 6. Protocolo de control humano
 

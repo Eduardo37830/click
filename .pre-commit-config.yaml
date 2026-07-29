@@ -16,12 +16,16 @@ repos:
         exclude: >
           (?x)^(
             acta_inspeccion\.md|
+            anexo_gobernanza_ia\.md|
             anexo_iso25010\.md|
+            bitacora_auditoria_ia\.md|
             casos_prueba_caja_negra\.md|
             entregable\.md|
             fichas_deuda_tecnica\.md|
+            INFORME_FINAL_AUDITORIA\.md|
             lunes_entregables\.md|
             matriz_gobernanza\.md|
+            poc_agente_qga\.md|
             pruebas_caja_negra\.py|
             openspec/.*
           )$
