@@ -1,5 +1,7 @@
 # Entregables LUNES — Auditoría click (pallets/click → Eduardo37830/click)
 
+Hola
+
 Fuentes: `gh` CLI sobre `pallets/click`, API pública de SonarCloud
 (`Eduardo37830_click`), conteo de líneas local. Todo verificable con las URLs citadas.
 
